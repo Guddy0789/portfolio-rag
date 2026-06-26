@@ -1,17 +1,20 @@
-import { embeddingModel } from './index.js';
+import { embeddingModel } from "./index.js";
 
 /**
- * Función que recibe un texto y devuelve su representación numérica (768 dimensiones)
+ * Convierte un texto en su representación numérica (vector de 1536 dimensiones).
+ *
+ * @param {string} text Texto a convertir en embedding.
+ * @returns {Promise<number[]|null>} Vector de embedding, o `null` si ocurre un error.
  */
-// brain.js
 export async function createEmbedding(text) {
   try {
     const result = await embeddingModel.embedContent({
       content: { parts: [{ text }] },
-      // Esta es la clave: le pedimos a Google que recorte el vector por nosotros
-      outputDimensionality: 1536, 
+      // Recortamos el vector a 1536 dimensiones para que coincida con la
+      // columna `embedding vector(1536)` definida en Supabase.
+      outputDimensionality: 1536,
     });
-    
+
     return result.embedding.values;
   } catch (error) {
     console.error("❌ Error al crear el embedding:", error);

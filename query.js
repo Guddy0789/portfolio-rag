@@ -1,65 +1,61 @@
-import { supabase } from './index.js';
-import { createEmbedding } from './brain.js';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import 'dotenv/config';
+import { supabase } from "./index.js";
+import { createEmbedding } from "./brain.js";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import "dotenv/config";
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENAI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
+/**
+ * Ejecuta el flujo RAG completo para una pregunta:
+ *  1. Convierte la pregunta en un vector (embedding).
+ *  2. Busca los fragmentos más parecidos en Supabase (pgvector).
+ *  3. Construye un prompt con ese contexto y pide la respuesta a Gemini.
+ *
+ * @param {string} question Pregunta en lenguaje natural del usuario.
+ */
 async function askRAG(question) {
   console.log(`\n🔍 Pregunta: ${question}`);
 
-  // 1. Convertir la pregunta en un vector
+  // 1. Convertir la pregunta en un vector.
   const queryVector = await createEmbedding(question);
 
-  if (!queryVector) return;
+  if (!queryVector) {
+    console.error("❌ No se pudo generar el embedding de la pregunta.");
+    return;
+  }
 
-  // 2. Buscar en Supabase
-  const { data: documents, error } = await supabase.rpc('match_documents', {
+  // 2. Buscar los fragmentos más similares en la base vectorial.
+  const { data: documents, error } = await supabase.rpc("match_documents", {
     query_embedding: queryVector,
-    match_threshold: 0.3, // Bajamos un poco el umbral para ver más resultados si existen
+    match_threshold: 0.3, // Umbral bajo para recuperar más candidatos.
     match_count: 3,
   });
-
-  if (documents && documents.length > 0) {
-  console.log("\n--- 🧱 DATOS EN BRUTO (RAW) DESDE SUPABASE ---");
-  
-  documents.forEach((doc, i) => {
-    console.log(`\n[Fragmento #${i + 1}]`);
-    console.log(`Contenido Original: ${doc.content}`); // <--- Esto es lo que "lee" la base de datos
-    console.log(`Similitud Matemática: ${doc.similarity.toFixed(4)}`);
-  });
-
-  console.log("\n----------------------------------------------");
-}
 
   if (error) {
     console.error("❌ Error en la búsqueda:", error);
     return;
   }
 
-  // --- NUEVA SECCIÓN DE DEPURACIÓN ---
+  // Mostrar los datos en bruto recuperados (útil para depurar).
   console.log("\n--- 📦 DATOS ENCONTRADOS EN SUPABASE (RAW) ---");
-  if (documents.length === 0) {
+  if (!documents || documents.length === 0) {
     console.log("⚠️ No se encontraron fragmentos similares.");
-  } else {
-    documents.forEach((doc, index) => {
-      console.log(`\n[Resultado #${index + 1}]`);
-      console.log(`🆔 ID: ${doc.id}`);
-      console.log(`📈 Similitud: ${(doc.similarity * 100).toFixed(2)}%`);
-      console.log(`📝 Texto: "${doc.content.substring(0, 200)}..."`);
-    });
-  }
-  console.log("----------------------------------------------\n");
-  // ------------------------------------
-
-  if (documents.length === 0) {
+    console.log("----------------------------------------------\n");
     console.log("🤖 Gemini no tiene contexto suficiente para responder.");
     return;
   }
 
+  documents.forEach((doc, index) => {
+    console.log(`\n[Resultado #${index + 1}]`);
+    console.log(`🆔 ID: ${doc.id}`);
+    console.log(`📈 Similitud: ${(doc.similarity * 100).toFixed(2)}%`);
+    console.log(`📝 Texto: "${doc.content.substring(0, 200)}..."`);
+  });
+  console.log("----------------------------------------------\n");
+
   // 3. Unir los textos encontrados
-  const context = documents.map(doc => doc.content).join('\n---\n');
+  const context = documents.map((doc) => doc.content).join("\n---\n");
 
   // 4. El "Super Prompt"
   const prompt = `
@@ -80,5 +76,8 @@ async function askRAG(question) {
   console.log(result.response.text());
 }
 
-// Prueba con una pregunta específica
-askRAG("¿Qué se dice sobre Ferrari y Porsche?");
+// Permite pasar la pregunta como argumento: `node query.js "tu pregunta"`.
+// Si no se pasa nada, usa una pregunta de ejemplo.
+const question =
+  process.argv.slice(2).join(" ") || "¿Qué se dice sobre Ferrari y Porsche?";
+askRAG(question);

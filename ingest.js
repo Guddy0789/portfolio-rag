@@ -1,16 +1,20 @@
-import fs from 'fs';
-import { supabase } from './index.js';
-import { createEmbedding } from './brain.js';
+import fs from "fs";
+import { supabase } from "./index.js";
+import { createEmbedding } from "./brain.js";
+
+// Archivo de texto que sirve como base de conocimiento.
+const SOURCE_FILE = "conocimiento.txt";
 
 async function runIngestion() {
   console.log("🚀 Iniciando proceso de ingesta...");
 
-  // 1. Leer el archivo de texto
-  const text = fs.readFileSync('conocimiento.txt', 'utf8');
+  // 1. Leer el archivo de texto.
+  const text = fs.readFileSync(SOURCE_FILE, "utf8");
 
-  // 2. Chunking (División): Por ahora dividiremos simplemente por párrafos (\n\n)
-  const chunks = text.split('\n').filter(p => p.trim() !== "");
-  
+  // 2. Chunking (división): separamos el texto en fragmentos por líneas
+  //    y descartamos las líneas vacías.
+  const chunks = text.split("\n").filter((p) => p.trim() !== "");
+
   console.log(`📝 Se encontraron ${chunks.length} pedazos de texto.`);
 
   for (const chunk of chunks) {
@@ -21,12 +25,10 @@ async function runIngestion() {
 
     if (vector) {
       // 4. Guardar en Supabase
-      const { error } = await supabase
-        .from('documents')
-        .insert({
-          content: chunk,
-          embedding: vector
-        });
+      const { error } = await supabase.from("documents").insert({
+        content: chunk,
+        embedding: vector,
+      });
 
       if (error) {
         console.error("❌ Error al insertar en Supabase:", error);
@@ -35,7 +37,7 @@ async function runIngestion() {
       }
     }
   }
-  
+
   console.log("🏁 Proceso terminado.");
 }
 
